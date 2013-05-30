@@ -40,9 +40,14 @@ my class Generator {
                 return -> $g, $match {
                     sub collect([$gen, *@rest]) {
                         if @rest {
-                            gather for $gen.($g, $match) -> $res {
-                                for collect(@rest) -> $next {
-                                    take $res ~ $next;
+                            gather {
+                                my @results := $gen.($g, $match).list;
+                                while @results {
+                                    my $res = @results.shift;
+                                    my @collected := collect(@rest).list;
+                                    while @collected {
+                                        take $res ~ @collected.shift();
+                                    }
                                 }
                             }
                         }
@@ -63,8 +68,9 @@ my class Generator {
                 return -> $g, $match {
                     gather {
                         for @generators -> $altgen {
-                            for $altgen.($g, $match) -> $res {
-                                take $res;
+                            my @results := $altgen.($g, $match).list;
+                            while @results {
+                                take @results.shift();
                             }
                             CATCH {
                                 when X::Grammar::Generative::Unable { }
@@ -80,8 +86,9 @@ my class Generator {
                 return -> $g, $match {
                     my @possibles;
                     for @generators -> $altgen {
-                        for $altgen.($g, $match) -> $res {
-                            @possibles.push($res);
+                        my @results := $altgen.($g, $match);
+                        while @results {
+                            @possibles.push(@results.shift());
                         }
                         CATCH {
                             when X::Grammar::Generative::Unable { }
@@ -228,7 +235,7 @@ my class Generator {
                 my $callback_after = -> $str {
                     CallbackConcat.new(:$callback_before, :$callback_after, :$str)
                 }
-                $cb = CallbackConcat.new(:$callback_before, :$callback_after)
+                [$cb = CallbackConcat.new(:$callback_before, :$callback_after)]
             }
         }
         when 'eos' {
@@ -240,14 +247,14 @@ my class Generator {
                 my $callback_before = -> $str {
                     CallbackConcat.new(:$callback_before, :$callback_after, :$str)
                 }
-                $cb = CallbackConcat.new(:$callback_before, :$callback_after)
+                [$cb = CallbackConcat.new(:$callback_before, :$callback_after)]
             }
         }
         when 'fail' {
             -> $, $ { X::Grammar::Generative::Unable.new.throw() }
         }
         default {
-            -> $, $ { '' }
+            -> $, $ { [''] }
         }
     }
 }
@@ -281,7 +288,7 @@ my role Generative {
         if $g {
             gather {
                 while @gen {
-                    take @gen.shift;
+                    take @gen.shift.Str;
                 }
                 CATCH {
                     when X::Grammar::Generative::Unable { }
@@ -289,7 +296,7 @@ my role Generative {
             }
         }
         else {
-            @gen[0]
+            @gen[0].Str
         }
     }
 }
