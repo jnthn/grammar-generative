@@ -97,7 +97,19 @@ my class Generator {
 my role Generative {
     method generate($match = \(), :$rule = 'TOP', :$g) {
         my @gen := self.^generator($rule).generate(self, $match);
-        $g ?? @gen !! @gen[0]
+        if $g {
+            gather {
+                while @gen {
+                    take @gen.shift;
+                }
+                CATCH {
+                    when X::Grammar::Generative::Unable { }
+                }
+            }
+        }
+        else {
+            @gen[0]
+        }
     }
 }
 

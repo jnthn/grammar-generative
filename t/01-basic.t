@@ -1,7 +1,7 @@
 use Grammar::Generative;
 use Test;
 
-plan 4;
+plan 7;
 
 grammar T01 {
     token TOP { dog }
@@ -43,3 +43,14 @@ is T03.generate(\(
     ))),
     'It rained.',
     'capture/altseq interaction';
+{
+    my @all = T03.generate(\(
+        sentence => \(
+            subject => 'Man',
+            verb    => 'bites',
+            object  => 'dog'
+        )), :g);
+    is +@all, 2, 'altseq visits both possibles in :g mode';
+    is @all[0], 'Man bites dog.', 'first alt is correct';
+    is @all[1], 'Man bites.', 'second alt is correct';
+}
