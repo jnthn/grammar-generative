@@ -1,5 +1,24 @@
 class X::Grammar::Generative::Unable is Exception { }
 
+class CallbackConcat {
+    has $.str = '';
+    has &.callback_before;
+    has &.callback_after;
+    method Str() { $!str }
+}
+
+multi infix:<~>(CallbackConcat $a, Any $b) {
+    $a.callback_after()($a.str ~ $b)
+}
+
+multi infix:<~>(Any $a, CallbackConcat $b) {
+    $b.callback_before()($a ~ $b.str)
+}
+
+multi infix:<~>(CallbackConcat $a, CallbackConcat $b) {
+    $a.callback_after()($a.str ~ $b.str)
+}
+
 my class Generator {
     has Mu $!ast;
     has &!generator;
@@ -121,6 +140,10 @@ my class Generator {
                 return self.subrule_call($ast, 'ws');
             }
             
+            when 'anchor' {
+                return self.anchor($ast.subtype);
+            }
+            
             default {
                 die "Don't know how to generate $_";
             }
@@ -180,6 +203,39 @@ my class Generator {
         }
         else {
             die "Unnamed subrule is not yet handled for generation."
+        }
+    }
+    
+    method anchor($_) {
+        when 'bos' {
+            -> $, $ {
+                my $cb;
+                my $callback_before = -> $str {
+                    $str eq '' ?? $cb !! X::Grammar::Generative::Unable.new.throw()
+                }
+                my $callback_after = -> $str {
+                    CallbackConcat.new(:$callback_before, :$callback_after, :$str)
+                }
+                $cb = CallbackConcat.new(:$callback_before, :$callback_after)
+            }
+        }
+        when 'eos' {
+            -> $, $ {
+                my $cb;
+                my $callback_after = -> $str {
+                    $str eq '' ?? $cb !! X::Grammar::Generative::Unable.new.throw()
+                }
+                my $callback_before = -> $str {
+                    CallbackConcat.new(:$callback_before, :$callback_after, :$str)
+                }
+                $cb = CallbackConcat.new(:$callback_before, :$callback_after)
+            }
+        }
+        when 'fail' {
+            -> $, $ { X::Grammar::Generative::Unable.new.throw() }
+        }
+        default {
+            -> $, $ { '' }
         }
     }
 }
