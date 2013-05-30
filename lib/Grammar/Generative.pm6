@@ -54,6 +54,25 @@ my class Generator {
                 }
             }
             
+            when 'alt' {
+                my @generators = $ast.list.map({ self.compile($^child) });
+                return -> $g, $match {
+                    my @possibles;
+                    for @generators -> $altgen {
+                        for $altgen.($g, $match) -> $res {
+                            @possibles.push($res);
+                        }
+                        CATCH {
+                            when X::Grammar::Generative::Unable { }
+                        }
+                    }
+                    gather {
+                        .take for @possibles.sort(-*.chars);
+                        X::Grammar::Generative::Unable.new.throw()
+                    }
+                }
+            }
+            
             when 'subrule' {
                 my $name = $ast.name;
                 if $name {

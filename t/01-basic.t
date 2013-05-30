@@ -1,7 +1,7 @@
 use Grammar::Generative;
 use Test;
 
-plan 10;
+plan 12;
 
 grammar T01 {
     token TOP { dog }
@@ -84,3 +84,26 @@ is T06.generate(\(
     )),
     '8+2i * 7+45i',
     'quant with list specified';
+
+grammar T07 {
+    token TOP { <sentence> }
+    token sentence {
+        | <subject> ' ' <verb> '.'
+        | <subject> ' ' <verb> ' ' <object> '.'
+    }
+}
+is T07.generate(\(
+    sentence => \(
+        subject => 'Man',
+        verb    => 'bites'
+    ))),
+    'Man bites.',
+    'alt works when we hit first case';
+is T07.generate(\(
+    sentence => \(
+        subject => 'Man',
+        verb    => 'bites',
+        object  => 'dog'
+    ))),
+    'Man bites dog.',
+    'alt picks correct thing even when second';
