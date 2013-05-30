@@ -1,26 +1,26 @@
 class X::Grammar::Generative::Unable is Exception {
-    method message() { "Unable to generate; so matching path found" }
+    method message() { "Unable to generate; no matching path found" }
 }
 
+# Callback-on-concatenate, used for implementing various anchors.
 class CallbackConcat {
     has $.str = '';
     has &.callback_before;
     has &.callback_after;
     method Str() { $!str }
 }
-
 multi infix:<~>(CallbackConcat $a, Any $b) {
     $a.callback_after()($a.str ~ $b)
 }
-
 multi infix:<~>(Any $a, CallbackConcat $b) {
     $b.callback_before()($a ~ $b.str)
 }
-
 multi infix:<~>(CallbackConcat $a, CallbackConcat $b) {
     $a.callback_after()($a.str ~ $b.str)
 }
 
+# Drives the overall generation process. "Compiles" by building up trees of
+# closures; those actually do the generation work.
 my class Generator {
     has Mu $!ast;
     has &!generator;
@@ -34,7 +34,7 @@ my class Generator {
     }
     
     method compile(Mu $ast) {
-        given $ast.rxtype {
+        given $ast.rxtype // 'concat' {
             when 'concat' {
                 my @generators = $ast.list.map({ self.compile($^child) });
                 return -> $g, $match {
@@ -95,9 +95,13 @@ my class Generator {
             }
             
             when 'subrule' {
-                my $name = $ast.name;
+                my $name = $ast.name // '';
                 if $name {
                     return self.subrule_call($ast, $name);
+                }
+                elsif $ast.subtype eq 'method' && (try $ast.list[0].list[0].value eq 'FAILGOAL') {
+                    # Bit of a cheat...
+                    return -> $, $ { [''] }
                 }
                 else {
                     die "Unnamed subrule is not yet handled for generation."
@@ -105,7 +109,7 @@ my class Generator {
             }
             
             when 'subcapture' {
-                my $name   = $ast.name;
+                my $name   = $ast.name // '';
                 my $subgen = self.compile($ast.list.[0]);
                 return -> $g, $match {
                     if $match{$name} -> $submatch {
@@ -131,7 +135,7 @@ my class Generator {
                 my $sep = $ast.list.elems == 2
                     ?? self.compile($ast.list[1])
                     !! Any;
-                if $quantee.rxtype eq 'subrule' | 'subcapture' {
+                if ($quantee.rxtype // '') eq 'subrule' | 'subcapture' {
                     return self.subrule_quant($ast, $quantee, $backtrack, $sep);
                 }
                 else {
@@ -248,6 +252,7 @@ my class Generator {
     }
 }
 
+# Hanlding of proto-regex generation (must just delegates).
 my class ProtoGenerator {
     has $.name;
     
@@ -268,6 +273,8 @@ my class ProtoGenerator {
     }
 }
 
+# Role automatically mixed into grammars where Grammar::Generative is in
+# scope. Provides the generate method, which is the entry point.
 my role Generative {
     method generate($match = \(), :$rule = 'TOP', :$g) {
         my @gen := self.^generator($rule).generate(self, $match);
