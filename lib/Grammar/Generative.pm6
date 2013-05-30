@@ -1,4 +1,6 @@
-class X::Grammar::Generative::Unable is Exception { }
+class X::Grammar::Generative::Unable is Exception {
+    method message() { "Unable to generate; so matching path found" }
+}
 
 class CallbackConcat {
     has $.str = '';
@@ -114,6 +116,9 @@ my class Generator {
                             [~$submatch]
                         }
                     }
+                    elsif $name eq 'sym' {
+                        $subgen($g, $match)
+                    }
                     else {
                         X::Grammar::Generative::Unable.new.throw()
                     }
@@ -160,6 +165,9 @@ my class Generator {
                     else {
                         [~$submatch]
                     }
+                }
+                elsif $g.^is_gen_proto($name) {
+                    $g.^generator($name).generate($g, $match)
                 }
                 else {
                     X::Grammar::Generative::Unable.new.throw()
@@ -240,6 +248,26 @@ my class Generator {
     }
 }
 
+my class ProtoGenerator {
+    has $.name;
+    
+    method generate($g, $match) {
+        my @rules := $g."!protoregex_table"(){$!name};
+        for @rules -> $rname {
+            if defined $match{$rname} {
+                my $submatch = $match{$rname};
+                if $submatch ~~ Capture {
+                    return $g.^generator($rname).generate($g, $submatch)
+                }
+                else {
+                    return [~$submatch]
+                }
+            }
+        }
+        X::Grammar::Generative::Unable.new.throw()
+    }
+}
+
 my role Generative {
     method generate($match = \(), :$rule = 'TOP', :$g) {
         my @gen := self.^generator($rule).generate(self, $match);
@@ -268,6 +296,7 @@ my %builtin_generators =
 my module EXPORTHOW {
     class grammar is Metamodel::GrammarHOW {
         has %!generators;
+        has %!gen_protos;
         
         method new_type(|) {
             my $type := callsame();
@@ -277,6 +306,15 @@ my module EXPORTHOW {
         
         method save_rx_ast(Mu $obj, $name, Mu $ast) {
             %!generators{$name} = Generator.new(:$ast);
+        }
+        
+        method set_gen_proto(Mu $obj, $name) {
+            %!generators{$name} = ProtoGenerator.new(:$name);
+            %!gen_protos{$name} = True;
+        }
+        
+        method is_gen_proto(Mu $obj, $name) {
+            %!gen_protos{$name}
         }
         
         method generator($obj, $name) {
@@ -292,10 +330,13 @@ our sub EXPORT() {
     sub setup_ast_capture(%lang) {
         %lang<MAIN-actions> := %lang<MAIN-actions> but role {
             method regex_def(Mu $m) {
-                my $ast := $m.hash<nibble>.ast;
+                my $nibble := $m.hash<nibble>;
                 callsame;
-                if $*PACKAGE.HOW.HOW.can($*PACKAGE.HOW, 'save_rx_ast') {
-                    $*PACKAGE.HOW.save_rx_ast($*PACKAGE, $*DECLARAND.name, $ast);
+                if $nibble && $*PACKAGE.HOW.HOW.can($*PACKAGE.HOW, 'save_rx_ast') {
+                    $*PACKAGE.HOW.save_rx_ast($*PACKAGE, $*DECLARAND.name, $nibble.ast);
+                }
+                elsif $*MULTINESS eq 'proto' && $*PACKAGE.HOW.HOW.can($*PACKAGE.HOW, 'set_gen_proto') {
+                    $*PACKAGE.HOW.set_gen_proto($*PACKAGE, $*DECLARAND.name);
                 }
             }
         }
