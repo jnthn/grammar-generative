@@ -1,7 +1,7 @@
 use Grammar::Generative;
 use Test;
 
-plan 9;
+plan 10;
 
 grammar T01 {
     token TOP { dog }
@@ -70,4 +70,17 @@ is T05.generate(\(
         num => [5, 19, 21, 8]
     )),
     '5, 19, 21, 8',
+    'quant with list specified';
+
+grammar T06 {
+    token TOP { <comp>* % ' * ' }
+    token comp { $<re>=[\d+] '+' $<im>=[\d+] 'i' }
+}
+is T06.generate(\(
+        comp => [
+            \( re => 8, im => 2 ),
+            \( re => 7, im => 45 )
+        ]
+    )),
+    '8+2i * 7+45i',
     'quant with list specified';

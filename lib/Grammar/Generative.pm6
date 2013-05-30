@@ -138,7 +138,7 @@ my class Generator {
                         my @matches;
                         for @$submatch {
                             when Capture {
-                                @matches.push: $gen($g, $_)
+                                @matches.push: $gen.generate($g, $_)
                             }
                             default {
                                 @matches.push(~$_);
