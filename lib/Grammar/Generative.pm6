@@ -1,9 +1,10 @@
+# Thrown to indicate there was no matching data found for generation.
 class X::Grammar::Generative::Unable is Exception {
     method message() { "Unable to generate; no matching path found" }
 }
 
 # Callback-on-concatenate, used for implementing various anchors.
-class CallbackConcat {
+my class CallbackConcat {
     has $.str = '';
     has &.callback_before;
     has &.callback_after;
