@@ -1,7 +1,7 @@
 use Grammar::Generative;
 use Test;
 
-plan 12;
+plan 13;
 
 grammar T01 {
     token TOP { dog }
@@ -107,3 +107,16 @@ is T07.generate(\(
     ))),
     'Man bites dog.',
     'alt picks correct thing even when second';
+
+grammar T08 {
+    token TOP { <sentence> }
+    rule sentence {<subject> <verb> :!s <object> '.' }
+}
+is T08.generate(\(
+    sentence => \(
+        subject => 'Petrucci',
+        verb    => 'plays',
+        object  => 'guitar'
+    ))),
+    'Petrucci plays guitar.',
+    'rules/<.ws>';

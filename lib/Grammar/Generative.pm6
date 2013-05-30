@@ -4,7 +4,7 @@ my class Generator {
     has Mu $!ast;
     has &!generator;
     
-    submethod BUILD(Mu :$ast) {
+    submethod BUILD(Mu :$ast, :&!generator) {
         $!ast := $ast;
     }
     
@@ -117,6 +117,10 @@ my class Generator {
                 }
             }
             
+            when 'ws' {
+                return self.subrule_call($ast, 'ws');
+            }
+            
             default {
                 die "Don't know how to generate $_";
             }
@@ -199,6 +203,10 @@ my role Generative {
     }
 }
 
+# Some built-in generators for rules inherited from Cursor.
+my %builtin_generators =
+    ws => Generator.new(generator => -> $, $ { ' ' });
+
 # Replace "grammar" keyword with one that causes Generative to be mixed in
 # automatically, plus provides a place to store captured grammar ASTs, etc.
 my module EXPORTHOW {
@@ -216,7 +224,9 @@ my module EXPORTHOW {
         }
         
         method generator($obj, $name) {
-            %!generators{$name} // die "Don't know how to generate $name"
+            %!generators{$name} ||
+                %builtin_generators{$name} ||
+                    die "Don't know how to generate $name"
         }
     }
 }
