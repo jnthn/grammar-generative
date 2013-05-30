@@ -1,7 +1,7 @@
 use Grammar::Generative;
 use Test;
 
-plan 7;
+plan 8;
 
 grammar T01 {
     token TOP { dog }
@@ -54,3 +54,10 @@ is T03.generate(\(
     is @all[0], 'Man bites dog.', 'first alt is correct';
     is @all[1], 'Man bites.', 'second alt is correct';
 }
+
+grammar T04 {
+    token TOP { $<re>=[\d+] '+' $<im>=[\d+] 'i' }
+}
+is T04.generate(\(re => 5, im => 9)),
+    '5+9i',
+    'subcapture';

@@ -64,6 +64,31 @@ my class Generator {
                 }
             }
             
+            when 'subcapture' {
+                my $name   = $ast.name;
+                my $subgen = self.compile($ast.list.[0]);
+                return -> $g, $match {
+                    if $match{$name} -> $submatch {
+                        if $submatch ~~ Capture {
+                            $subgen($g, $submatch)
+                        }
+                        else {
+                            [~$submatch]
+                        }
+                    }
+                    else {
+                        X::Grammar::Generative::Unable.new.throw()
+                    }
+                }
+            }
+            
+            when 'quant' {
+                my $backtrack = $ast.backtrack // 'g';
+                return -> $g, $match {
+                    die "quants NYI";
+                }
+            }
+            
             default {
                 die "Don't know how to generate $_";
             }
@@ -74,11 +99,11 @@ my class Generator {
         if $ast.subtype eq 'capture' {
             return -> $g, $match {
                 if $match{$name} -> $submatch {
-                    if $submatch ~~ Str {
-                        [$submatch]
+                    if $submatch ~~ Capture {
+                        $g.^generator($name).generate($g, $submatch)
                     }
                     else {
-                        $g.^generator($name).generate($g, $submatch)
+                        [~$submatch]
                     }
                 }
                 else {
