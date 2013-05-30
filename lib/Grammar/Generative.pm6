@@ -84,8 +84,17 @@ my class Generator {
             
             when 'quant' {
                 my $backtrack = $ast.backtrack // 'g';
-                return -> $g, $match {
-                    die "quants NYI";
+                my $quantee := $ast.list.[0];
+                my $sep = $ast.list.elems == 2
+                    ?? self.compile($ast.list[1])
+                    !! Any;
+                if $quantee.rxtype eq 'subrule' | 'subcapture' {
+                    return self.subrule_quant($ast, $quantee, $backtrack, $sep);
+                }
+                else {
+                    return -> $g, $match {
+                        die "quantifiers other than on subrule/subcapture NYI";
+                    }
                 }
             }
             
@@ -115,6 +124,39 @@ my class Generator {
             return -> $g, $match {
                 $g.^generator($name).generate($g, \())
             }
+        }
+    }
+    
+    method subrule_quant(Mu $ast, Mu $quantee, $backtrack, $sep) {
+        my $name := $quantee.name;
+        if $name {
+            -> $g, $match {
+                if $match.hash.exists($name) {
+                    my $submatch = $match{$name};
+                    if $submatch ~~ List {
+                        my $gen = $g.^generator($name);
+                        my @matches;
+                        for @$submatch {
+                            when Capture {
+                                @matches.push: $gen($g, $_)
+                            }
+                            default {
+                                @matches.push(~$_);
+                            }
+                        }
+                        [@matches.join($sep ?? $sep($g, $match) !! '')]
+                    }
+                    else {
+                        die "Expected a List for quantified match $name";
+                    }
+                }
+                else {
+                    X::Grammar::Generative::Unable.new.throw()
+                }
+            }
+        }
+        else {
+            die "Unnamed subrule is not yet handled for generation."
         }
     }
 }

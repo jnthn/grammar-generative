@@ -1,7 +1,7 @@
 use Grammar::Generative;
 use Test;
 
-plan 8;
+plan 9;
 
 grammar T01 {
     token TOP { dog }
@@ -61,3 +61,13 @@ grammar T04 {
 is T04.generate(\(re => 5, im => 9)),
     '5+9i',
     'subcapture';
+
+grammar T05 {
+    token TOP { <num>* % ', ' }
+    token num { \d+ }
+}
+is T05.generate(\(
+        num => [5, 19, 21, 8]
+    )),
+    '5, 19, 21, 8',
+    'quant with list specified';
