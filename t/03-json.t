@@ -1,7 +1,7 @@
 use Grammar::Generative;
 use Test;
 
-plan 1;
+plan 2;
 
 # JSON::Tiny grammar thanks to moritz++, nabbed for a more realistic test.
 grammar JSON::Tiny::Grammar {
@@ -44,19 +44,70 @@ ok JSON::Tiny::Grammar.generate(\(
         pairlist => \(
             pair => [
                 \(
-                    string              => 'name',
+                    string              => '"name"',
                     'value:sym<string>' => '"Yeti"'
                 ),
                 \(
-                    string              => 'volume',
+                    string              => '"volume"',
                     'value:sym<number>' => 9.8
                 ),
                 \(
-                    string              => 'delicious',
+                    string              => '"delicious"',
                     'value:sym<true>'   => \()
                 )
             ]
         ))))
     ~~
-    /^ :s '{' 'name' ':' '"Yeti"' ',' 'volume' ':' '9.8' ',' 'delicious' ':' 'true' '}' $/,
+    /^ :s '{' '"name"' ':' '"Yeti"' ',' '"volume"' ':' '9.8' ',' '"delicious"' ':' 'true' '}' $/,
     'Basic JSON generation works';
+
+
+class JSON::Tiny::Backtions {
+    multi method TOP(@a) {
+        \(array => dice(@a))
+    }
+    
+    multi method TOP(%h) {
+        \(object => dice(%h))
+    }
+    
+    method array(@a) {
+        \(arraylist => \(value => @a.map(&dice)))
+    }
+    
+    method object(%h) {
+        \(pairlist => dice(%h.pairs))
+    }
+    
+    method pairlist(@pairs) {
+        my @diced = @pairs.map(&dice);
+        \(pair => @diced)
+    }
+    
+    method pair($p) {
+        \(string => qq["$p.key()"], value => dice($p.value))
+    }
+    
+    multi method value(Str $s) {
+        \('value:sym<string>' => \(string => qq["$s"]))
+    }
+    
+    multi method value(Real $n) {
+        \('value:sym<number>' => $n)
+    }
+    
+    multi method value(True) {
+        \('value:sym<true>' => \())
+    }
+    
+    multi method value(False) {
+        \('value:sym<false>', \())
+    }
+}
+
+ok JSON::Tiny::Grammar.generate(
+    { name => 'Yeti', volume => 9.8, delicious => True },
+    backtions => JSON::Tiny::Backtions)
+    ~~
+    /^ :s '{' '"name"' ':' '"Yeti"' ',' '"volume"' ':' '9.8' ',' '"delicious"' ':' 'true' '}' $/,
+    'Basic JSON generation with backtions';

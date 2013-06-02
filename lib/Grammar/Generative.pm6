@@ -20,6 +20,15 @@ multi infix:<~>(CallbackConcat $a, CallbackConcat $b) {
     $a.callback_after()($a.str ~ $b.str)
 }
 
+# A way to wrap an object that needs to be diced (broken up into parts before
+# generating text).
+my class Diceable {
+    has $.object;
+}
+sub dice($object) {
+    Diceable.new(:$object)
+}
+
 # Drives the overall generation process. "Compiles" by building up trees of
 # closures; those actually do the generation work.
 my class Generator {
@@ -120,7 +129,10 @@ my class Generator {
                 my $name   = $ast.name // '';
                 my $subgen = self.compile($ast.list.[0]);
                 return -> $g, $match {
-                    if $match{$name} -> $submatch {
+                    if $match{$name} -> $submatchish {
+                        my $submatch = $submatchish ~~ Diceable
+                            ?? $*BACKTIONS."$name"($submatchish.object)
+                            !! $submatchish;
                         if $submatch ~~ Capture {
                             $subgen($g, $submatch)
                         }
@@ -170,16 +182,36 @@ my class Generator {
     method subrule_call(Mu $ast, $name) {
         if $ast.subtype eq 'capture' {
             return -> $g, $match {
-                if $match{$name} -> $submatch {
+                if $g.^is_gen_proto($name) {
+                    my $trymatch;
+                    if $match{$name} ~~ Diceable {
+                        $trymatch = $*BACKTIONS."$name"($match{$name}.object);
+                    }
+                    else {
+                        $trymatch = $match;
+                    }
+                    if $trymatch{$name} -> $submatch {
+                        if $submatch ~~ Capture {
+                            $g.^generator($name).generate($g, $submatch)
+                        }                    
+                        else {
+                            [~$submatch]
+                        }
+                    }
+                    else {
+                        $g.^generator($name).generate($g, $trymatch)
+                    }
+                }
+                elsif $match{$name} -> $submatchish {
+                    my $submatch = $submatchish ~~ Diceable
+                        ?? $*BACKTIONS."$name"($submatchish.object)
+                        !! $submatchish;
                     if $submatch ~~ Capture {
                         $g.^generator($name).generate($g, $submatch)
-                    }
+                    }                    
                     else {
                         [~$submatch]
                     }
-                }
-                elsif $g.^is_gen_proto($name) {
-                    $g.^generator($name).generate($g, $match)
                 }
                 else {
                     X::Grammar::Generative::Unable.new.throw()
@@ -203,6 +235,7 @@ my class Generator {
                         my $gen = $g.^generator($name);
                         my @matches;
                         for @$submatch {
+                            $_ = $*BACKTIONS."$name"($_.object) when Diceable;
                             when Capture {
                                 @matches.push: $gen.generate($g, $_)
                             }
@@ -268,7 +301,10 @@ my class ProtoGenerator {
         my @rules := $g."!protoregex_table"(){$!name};
         for @rules -> $rname {
             if defined $match{$rname} {
-                my $submatch = $match{$rname};
+                my $submatchish = $match{$rname};
+                my $submatch = $submatchish ~~ Diceable
+                        ?? $*BACKTIONS."$rname"($submatchish.object)
+                        !! $submatchish;
                 if $submatch ~~ Capture {
                     return $g.^generator($rname).generate($g, $submatch)
                 }
@@ -284,8 +320,11 @@ my class ProtoGenerator {
 # Role automatically mixed into grammars where Grammar::Generative is in
 # scope. Provides the generate method, which is the entry point.
 my role Generative {
-    method generate($match = \(), :$rule = 'TOP', :$g) {
-        my @gen := self.^generator($rule).generate(self, $match);
+    method generate($match = \(), :$rule = 'TOP', :backtions($*BACKTIONS) = Any, :$g) {
+        my @gen := self.^generator($rule).generate(self, 
+            $*BACKTIONS === Any
+                ?? $match
+                !! $*BACKTIONS."$rule"($match));
         if $g {
             gather {
                 while @gen {
@@ -357,5 +396,5 @@ our sub EXPORT() {
         }
     }
     setup_ast_capture(%*LANG);
-    {}
+    { '&dice' => &dice }
 }
