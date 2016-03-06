@@ -125,7 +125,7 @@ grammar T09 { token TOP { ^ foo $ } }
 is T09.generate(), 'foo', '^ and $ (unviolated case)';
 
 grammar T10 { token TOP { a ^ foo $ } }
-dies_ok { T10.generate() }, '^ and $ (^ violated)';
+dies-ok { T10.generate() }, '^ and $ (^ violated)';
 
 grammar T11 { token TOP { ^ foo $ 'x' } }
-dies_ok { T11.generate() }, '^ and $ ($ violated)';
+dies-ok { T11.generate() }, '^ and $ ($ violated)';
